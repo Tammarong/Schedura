@@ -1,18 +1,19 @@
 # 🚀 Schedura
 
-A modern web platform for learning and community interaction.
-Users can share knowledge, create posts, and engage with others in real-time.
+A modern full-stack web platform for learning and community interaction.
+Schedura enables users to share knowledge, collaborate in real-time, and manage their study and social activities in one place.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-* 🔐 Secure authentication (JWT)
-* 📝 Create, edit, and manage posts
-* 💬 Real-time messaging & interaction (Socket.IO)
-* 👥 Social features (friends, groups, followers)
-* 📅 Scheduling & study tools
-* 🖼️ Media uploads (images, avatars)
+* 🔐 Authentication system (JWT-based)
+* 📝 Post creation & content sharing
+* 💬 Real-time messaging (Socket.IO)
+* 👥 Social system (friends, followers, groups)
+* 📅 Scheduling & study planning tools
+* 🖼️ Media uploads (avatars, images)
+* 🌍 Internationalization (i18n support)
 * ⚡ Fast and responsive UI
 
 ---
@@ -21,10 +22,10 @@ Users can share knowledge, create posts, and engage with others in real-time.
 
 ### Frontend
 
-* React
-* TypeScript
+* React + TypeScript
 * Vite
 * Tailwind CSS
+* Zustand (state management)
 
 ### Backend
 
@@ -48,7 +49,7 @@ Users can share knowledge, create posts, and engage with others in real-time.
 * Frontend → Vercel
 * Backend → Render
 * Database → Neon
-* Containerization → Docker
+* Docker → Containerization
 
 ---
 
@@ -57,32 +58,56 @@ Users can share knowledge, create posts, and engage with others in real-time.
 ```bash
 Schedura/
 ├── apps/
-│   ├── frontend/      # React application
-│   └── backend/       # Express API
+│   ├── frontend/
+│   └── backend/
 ```
 
-### Backend Structure
+---
+
+## 🎨 Frontend Structure
+
+```bash
+frontend/
+├── public/
+├── src/
+│   ├── api/            # API calls
+│   ├── components/     # UI components
+│   │   └── ui/         # reusable UI (design system)
+│   ├── pages/          # app pages (routing)
+│   ├── hooks/          # custom hooks
+│   ├── context/        # global state (Auth)
+│   ├── providers/      # app providers
+│   ├── routes/         # route protection
+│   ├── lib/            # utilities & API config
+│   ├── chathead/       # real-time UI features
+│   └── i18n/           # internationalization
+```
+
+📌 Based on your actual structure 
+
+---
+
+## ⚙️ Backend Structure
 
 ```bash
 backend/
-├── prisma/            # Database schema & migrations
+├── prisma/            # database schema & migrations
 ├── src/
-│   ├── controllers/   # Business logic
+│   ├── controllers/   # business logic
 │   ├── routes/        # API endpoints
-│   ├── middleware/    # Authentication & validation
-│   ├── lib/           # Shared services (Prisma client)
-│   ├── utils/         # Utility functions
-│   ├── server/        # Socket.IO & server bootstrap
-│   └── types/         # Type definitions
-├── uploads/           # User uploaded files
-└── package.json
+│   ├── middleware/    # auth & validation
+│   ├── lib/           # Prisma client
+│   ├── utils/         # helper functions
+│   ├── server/        # socket + bootstrap
+│   └── types/         # type definitions
+├── uploads/           # user uploaded files
 ```
 
 ---
 
 ## ⚙️ Getting Started
 
-### 1. Clone the repository
+### 1. Clone repository
 
 ```bash
 git clone https://github.com/your-username/Schedura.git
@@ -103,9 +128,9 @@ npm install
 
 ---
 
-### 3. Setup environment variables
+### 3. Environment Setup
 
-Create `.env` file in `apps/backend`
+Create `.env` in backend:
 
 ```env
 DATABASE_URL=your_database_url
@@ -115,7 +140,7 @@ PORT=4000
 
 ---
 
-### 4. Run development servers
+### 4. Run Development
 
 #### Frontend
 
@@ -133,15 +158,15 @@ npm run dev
 
 ---
 
-## 🔗 API Integration
+## 🔗 API Communication
 
-Frontend is configured with proxy:
+Frontend uses proxy:
 
 ```ts
 /api → http://localhost:4000
 ```
 
-Example usage:
+Example:
 
 ```ts
 fetch("/api/posts")
@@ -169,14 +194,15 @@ docker-compose up --build
 
 ## 📌 Future Improvements
 
-* 🔍 Advanced search & filtering
+* 🔍 Advanced search system
 * 🤖 AI-powered recommendations
-* 📊 User analytics dashboard
-* 📱 Mobile optimization
+* 📊 Analytics dashboard
 * 🔐 Role-based access control
+* 📱 Mobile-first optimization
 
 ---
 
 ## ⭐️ Support
 
-If you like this project, please give it a star ⭐
+If you like this project, give it a star ⭐
+
