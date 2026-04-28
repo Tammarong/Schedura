@@ -1,0 +1,853 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")         // use Neon **pooled** URL here
+  directUrl = env("DIRECT_DATABASE_URL")  // use Neon **direct** URL here (no -pooler)
+}
+
+/* ===========================
+   Enums
+   =========================== */
+enum FriendStatus {
+  pending
+  accepted
+  rejected
+  blocked
+}
+
+// NEW: follow lifecycle for private accounts (requests) vs public (accepted immediately)
+enum FollowStatus {
+  requested
+  accepted
+}
+
+enum MessageVisibility {
+  normal
+  deletedForSender
+  deletedForReceiver
+}
+
+/* ---- NEW for Study Desk ---- */
+enum TaskPriority {
+  low
+  medium
+  high
+}
+
+enum SessionMode {
+  focus
+  break
+  longBreak
+}
+
+/* ---- NEW for Streaks ---- */
+enum StreakType {
+  post
+  study
+  dm
+  groupMessage
+}
+
+/* ---- NEW for Titles ---- */
+enum TitleSource {
+  streak
+  admin
+  event
+  referral
+  system
+  other
+}
+
+enum TitleRarity {
+  common
+  rare
+  epic
+  legendary
+}
+
+/* ---- NEW for Stories ---- */
+enum StoryVisibility {
+  auto       // public if user.is_private = false; else followers-only
+  public
+  followers
+}
+
+/* ===========================
+   Core Models
+   =========================== */
+
+model availability {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  day        String    @db.VarChar(20)
+  start_time DateTime  @db.Time(6)
+  end_time   DateTime  @db.Time(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_avail_user")
+
+  @@index([user_id])
+}
+
+model calendar_events {
+  id         Int       @id @default(autoincrement())
+  user_id    Int?
+  group_id   Int?
+  date       DateTime  @db.Date
+  title      String    @db.VarChar(200)
+  type       String    @db.VarChar(20) // "personal" | "group"
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  // --- fields for group schedule ---
+  location     String?   @db.VarChar(200)
+  description  String?
+  start_time   DateTime? @db.Time(6)   // store TIME (API "HH:mm")
+  end_time     DateTime? @db.Time(6)   // store TIME (API "HH:mm")
+
+  groups groups? @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_group")
+  users  users?  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_user")
+
+  @@index([user_id])
+  @@index([group_id])
+  @@index([date])
+
+  // Keep personal note unique (one per user per day)
+  @@unique([user_id, date, type], name: "calendar_events_user_id_date_type_unique")
+
+  // Upsert key for group events (one per group per day)
+  @@unique([group_id, date, type], name: "calendar_events_group_id_date_type_unique")
+}
+
+model chats {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(100)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model dm_chats {
+  id         Int       @id @default(autoincrement())
+  user1_id   Int
+  user2_id   Int
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  users_dm_chats_user1_idTousers users @relation("dm_chats_user1_idTousers", fields: [user1_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dm_user1")
+  users_dm_chats_user2_idTousers users @relation("dm_chats_user2_idTousers", fields: [user2_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dm_user2")
+
+  dm_messages dm_messages[]
+  dm_receipts dm_receipts[]
+
+  @@unique([user1_id, user2_id], map: "unique_dm")
+  @@index([user1_id])
+  @@index([user2_id])
+}
+
+model dm_messages {
+  id            Int       @id @default(autoincrement())
+  chat_id       Int
+  sender_id     Int
+  content       String
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  is_read       Boolean?  @default(false)
+  client_msg_id String?   @db.Uuid
+
+  dm_chats dm_chats @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dm_chat")
+  users    users    @relation(fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dm_sender")
+
+  @@unique([chat_id, client_msg_id])
+  @@index([chat_id, created_at])
+  @@index([sender_id, created_at])
+}
+
+model dm_receipts {
+  conversation_id  Int
+  user_id          Int
+  last_read_msg_id Int
+  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
+
+  dm_chats dm_chats @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  users    users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([conversation_id, user_id])
+}
+
+model events {
+  id          Int       @id @default(autoincrement())
+  title       String    @db.VarChar(200)
+  description String?
+  group_id    Int?
+  created_by  Int
+  date        DateTime  @db.Timestamptz(6)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  users  users   @relation(fields: [created_by], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_creator")
+  groups groups? @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_event_group")
+
+  @@index([group_id])
+  @@index([created_by])
+  @@index([date])
+}
+
+model friends {
+  id         Int          @id @default(autoincrement())
+  user_id    Int
+  friend_id  Int
+  status     FriendStatus @default(pending)
+  created_at DateTime?    @default(now()) @db.Timestamptz(6)
+
+  users_friends_friend_idTousers users @relation("friends_friend_idTousers", fields: [friend_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_friend")
+  users_friends_user_idTousers   users @relation("friends_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user")
+
+  @@unique([user_id, friend_id], map: "unique_friendship")
+  @@index([user_id, status])
+  @@index([friend_id, status])
+}
+
+model group_members {
+  id        Int       @id @default(autoincrement())
+  group_id  Int
+  user_id   Int
+  role      String?   @default("member") @db.VarChar(20)
+  joined_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  groups groups @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_group")
+  users  users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_group_user")
+
+  @@unique([group_id, user_id], name: "group_id_user_id", map: "unique_group_member")
+  @@index([user_id])
+  @@index([group_id])
+}
+
+model groups {
+  id              Int               @id @default(autoincrement())
+  name            String            @db.VarChar(100)
+  description     String?
+  location        String?           @db.VarChar(200)
+  owner_id        Int
+  created_at      DateTime?         @default(now()) @db.Timestamptz(6)
+  code            String?           @unique
+  highlight_color String?           @db.VarChar(20)
+
+  calendar_events calendar_events[]
+  events          events[]
+  group_members   group_members[]
+  users           users             @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_owner")
+  messages        messages[]
+  posts           posts[]
+
+  // 🔥 New back-relations
+  whiteboards     whiteboards[]
+  streaks         Streak[]
+  streak_activity StreakActivity[]
+
+  @@index([owner_id])
+}
+
+model messages {
+  id          Int       @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int?
+  group_id    Int?
+  content     String
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  groups                            groups?  @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_msg_group")
+  users_messages_receiver_idTousers users?   @relation("messages_receiver_idTousers", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_receiver")
+  users_messages_sender_idTousers   users    @relation("messages_sender_idTousers", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sender")
+
+  // 🔥 Back-relations
+  pictures message_pictures[]
+  reads    message_reads[]
+
+  @@index([group_id, created_at])
+  @@index([receiver_id, created_at])
+  @@index([sender_id, created_at])
+}
+
+model message_pictures {
+  id            Int      @id @default(autoincrement())
+  message_id    Int
+  message       messages  @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  // New:
+  data          Bytes?
+  mime_type     String?
+  original_name String?
+
+  // Legacy (optional, keep if you have historical rows on disk):
+  url           String?
+
+  @@index([message_id])
+}
+
+model message_reads {
+  message_id Int
+  user_id    Int
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  messages messages @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_message")
+  users    users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_read_user")
+
+  @@id([message_id, user_id])
+  @@index([user_id])
+  @@index([message_id, created_at])
+}
+
+model posts {
+  id         Int              @id @default(autoincrement())
+  user_id    Int
+  group_id   Int?
+  content    String
+  created_at DateTime?        @default(now()) @db.Timestamptz(6)
+  tags       String[]         @default([])
+
+  groups     groups?          @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_post_group")
+  users      users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_post_user")
+  likes      post_likes[]
+  comments   post_comments[]
+  pictures   post_pictures[]
+
+  @@index([user_id, created_at])
+  @@index([group_id, created_at])
+}
+
+model post_pictures {
+  id         Int      @id @default(autoincrement())
+  post_id    Int
+  url        String?          // <- make optional (legacy)
+  blob       Bytes?           // <- new
+  mime       String?          // <- new (e.g. "image/png")
+  created_at DateTime @default(now())
+
+  posts posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id])
+}
+
+model post_likes {
+  id      Int   @id @default(autoincrement())
+  post_id Int
+  user_id Int
+
+  posts posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([post_id, user_id])
+  @@index([user_id])
+}
+
+model post_comments {
+  id         Int       @id @default(autoincrement())
+  post_id    Int
+  user_id    Int
+  content    String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  posts posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id, created_at])
+  @@index([user_id, created_at])
+}
+
+/* ===========================
+   Sticky Notes / Whiteboards
+   =========================== */
+
+model whiteboards {
+  id          Int        @id @default(autoincrement())
+  owner_id    Int
+  group_id    Int?
+  title       String     @db.VarChar(120)
+  is_shared   Boolean    @default(false)
+  created_at  DateTime?  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime   @updatedAt @db.Timestamptz(6)
+
+  users   users   @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_whiteboard_owner")
+  groups  groups? @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_whiteboard_group")
+  notes   sticky_notes[]
+
+  @@index([owner_id])
+  @@index([group_id])
+}
+
+model sticky_notes {
+  id          Int       @id @default(autoincrement())
+  board_id    Int
+  user_id     Int
+  content     String    @db.Text
+  color       String?   @db.VarChar(20)
+  x           Float     @default(0)
+  y           Float     @default(0)
+  width       Float?
+  height      Float?
+  rotation    Float?    @default(0)
+  z_index     Int       @default(0)
+  is_archived Boolean   @default(false)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @updatedAt @db.Timestamptz(6)
+
+  whiteboards whiteboards @relation(fields: [board_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_note_board")
+  users       users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_note_user")
+
+  @@index([board_id])
+  @@index([user_id, created_at])
+  @@index([board_id, z_index])
+}
+
+/* ===========================
+   Study Desk
+   =========================== */
+
+// One desk per user (customizable layout/theme)
+model study_desks {
+  id          Int       @id @default(autoincrement())
+  user_id     Int       @unique
+  title       String?   @db.VarChar(120)
+  theme       String?   @db.VarChar(30)   // e.g., "minimal", "forest", etc.
+  layout      Json?                      // widget positions/config
+  prefs       Json?                      // misc preferences (sound, volumes, etc.)
+  created_at  DateTime? @default(now())  @db.Timestamptz(6)
+  updated_at  DateTime  @updatedAt       @db.Timestamptz(6)
+
+  users        users            @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_study_desk_user")
+  tasks        study_tasks[]
+  resources    study_resources[]
+  sessions     study_sessions[]
+
+  @@index([user_id])
+}
+
+// Tasks/to-dos shown on the desk
+model study_tasks {
+  id          Int           @id @default(autoincrement())
+  user_id     Int
+  desk_id     Int?
+  title       String
+  done        Boolean       @default(false)
+  priority    TaskPriority  @default(medium)
+  due_at      DateTime?
+  created_at  DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime      @updatedAt      @db.Timestamptz(6)
+
+  users        users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  study_desks  study_desks? @relation(fields: [desk_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, done])
+  @@index([desk_id])
+}
+
+// Helpful links/resources pinned to the desk
+model study_resources {
+  id          Int       @id @default(autoincrement())
+  user_id     Int
+  desk_id     Int?
+  title       String     @db.VarChar(200)
+  url         String?    @db.VarChar(500)
+  note        String?    @db.Text
+  created_at  DateTime?  @default(now()) @db.Timestamptz(6)
+
+  users        users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  study_desks  study_desks? @relation(fields: [desk_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([desk_id])
+}
+
+// Focus/break session logs (for Pomodoro or timer)
+model study_sessions {
+  id               Int          @id @default(autoincrement())
+  user_id          Int
+  desk_id          Int?
+  mode             SessionMode  @default(focus)
+  started_at       DateTime     @db.Timestamptz(6)
+  ended_at         DateTime?    @db.Timestamptz(6)
+  duration_seconds Int          @default(0)
+  created_at       DateTime?    @default(now()) @db.Timestamptz(6)
+
+  users        users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  study_desks  study_desks? @relation(fields: [desk_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, started_at])
+  @@index([desk_id])
+}
+
+/* ===========================
+   Streaks
+   =========================== */
+
+// ⬇️ drop-in replacement for `model streaks { ... }`
+model Streak {
+  id            Int         @id @default(autoincrement())
+  user_id       Int
+  group_id      Int?                      // NULL for personal, value for group streaks
+  type          StreakType
+  current_count Int         @default(0)
+  longest_count Int         @default(0)
+  start_date    DateTime?   @db.Date
+  last_date     DateTime?   @db.Date
+  created_at    DateTime?   @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime    @updatedAt      @db.Timestamptz(6)
+
+  users  users   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_streak_user")
+  groups groups? @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_streak_group")
+
+  @@unique([user_id, type, group_id], name: "streaks_user_id_type_group_unique")
+  @@index([user_id, type, group_id])
+  @@index([group_id])
+  @@index([last_date])
+
+  @@map("streaks") // <- keep existing table
+}
+
+// ⬇️ drop-in replacement for `model streak_activity { ... }`
+model StreakActivity {
+  id            Int         @id @default(autoincrement())
+  user_id       Int
+  group_id      Int?                      // NULL for personal, value for group activity
+  type          StreakType
+  activity_date DateTime    @db.Date
+  count         Int         @default(1)
+  created_at    DateTime?   @default(now()) @db.Timestamptz(6)
+
+  users  users   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_streak_activity_user")
+  groups groups? @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_streak_activity_group")
+
+  @@unique([user_id, type, activity_date, group_id], name: "streak_activity_unique_day_group")
+  @@index([user_id, type, activity_date, group_id])
+  @@index([group_id])
+
+  @@map("streak_activity") // <- keep existing table
+}
+
+/* ===========================
+   Titles (Cosmetic)
+   =========================== */
+
+model titles {
+  id           Int         @id @default(autoincrement())
+  key          String      @unique @db.VarChar(60)   // stable code: e.g., "spark_1d_post"
+  label        String      @db.VarChar(80)           // user-facing
+  description  String?     @db.VarChar(300)
+  emoji        String?     @db.VarChar(16)
+  color        String?     @db.VarChar(30)
+  rarity       TitleRarity?
+  unlock_json  Json?                                   // flexible unlock rule blob
+  is_active    Boolean     @default(true)
+  created_at   DateTime?   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime    @updatedAt      @db.Timestamptz(6)
+
+  // Relations
+  owned_by     user_titles[]
+  equipped_by  users[]     @relation("users_current_title")
+
+  @@index([is_active])
+}
+
+model user_titles {
+  user_id     Int
+  title_id    Int
+  obtained_at DateTime?   @default(now()) @db.Timestamptz(6)
+  source      TitleSource @default(other)
+  meta        Json?
+
+  users  users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_title_user")
+  titles titles @relation(fields: [title_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_title_title")
+
+  @@id([user_id, title_id])
+  @@index([title_id])
+  @@index([user_id, source])
+}
+
+/* ===========================
+   Followers (One-way Graph)
+   =========================== */
+
+model user_follows {
+  // New surrogate PK so controllers can use `id`
+  id           Int          @id @default(autoincrement())
+
+  // Unique edge follower -> followee
+  follower_id  Int
+  followee_id  Int
+
+  status       FollowStatus @default(accepted)
+  created_at   DateTime?    @default(now()) @db.Timestamptz(6)
+  accepted_at  DateTime?    @db.Timestamptz(6)
+
+  // Relations
+  follower users @relation("user_follows_follower", fields: [follower_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_follow_follower")
+  followee users @relation("user_follows_followee", fields: [followee_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_follow_followee")
+
+  // Preserve unique edge + useful indexes
+  @@unique([follower_id, followee_id])
+  @@index([follower_id, status], map: "idx_follow_by_follower_status")
+  @@index([followee_id, status], map: "idx_follow_by_followee_status")
+  @@index([created_at])
+}
+
+/* ===========================
+   Stories & Highlights
+   =========================== */
+
+model stories {
+  id            Int             @id @default(autoincrement())
+  user_id       Int
+  caption       String?         @db.VarChar(500)
+  visibility    StoryVisibility @default(auto)
+
+  // Media (either url OR blob)
+  media_url     String?         @db.VarChar(500)
+  media_blob    Bytes?
+  media_mime    String?         @db.VarChar(120)
+  media_width   Int?
+  media_height  Int?
+  media_seconds Int?
+
+  // Lifecycle
+  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  expires_at    DateTime        @db.Timestamptz(6)
+  archived_at   DateTime?       @db.Timestamptz(6)
+  keep_forever  Boolean         @default(false)
+
+  users            users           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  views            story_views[]
+  in_highlights    highlight_items[]
+
+  // 👇 NEW: back-relation for highlight cover
+  cover_of_highlights highlights[] @relation("HighlightCover")
+
+  @@index([user_id, created_at])
+  @@index([expires_at])
+  @@index([user_id, expires_at])
+}
+
+model story_views {
+  story_id  Int
+  viewer_id Int
+  viewed_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  stories stories @relation(fields: [story_id], references: [id], onDelete: Cascade)
+  users   users   @relation("story_views_viewer", fields: [viewer_id], references: [id], onDelete: Cascade)
+
+  @@id([story_id, viewer_id])
+  @@index([viewer_id, viewed_at])
+}
+
+model highlights {
+  id             Int       @id @default(autoincrement())
+  user_id        Int
+  title          String    @db.VarChar(100)
+  cover_story_id Int?
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @updatedAt      @db.Timestamptz(6)
+
+  users  users  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  items  highlight_items[]
+
+  // optional cover (must belong to same user)
+  cover_story stories? @relation("HighlightCover", fields: [cover_story_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, created_at])
+  @@index([cover_story_id])
+}
+
+model highlight_items {
+  highlight_id Int
+  story_id     Int
+  position     Int       @default(0)
+  added_at     DateTime? @default(now()) @db.Timestamptz(6)
+
+  highlights highlights @relation(fields: [highlight_id], references: [id], onDelete: Cascade)
+  stories    stories    @relation(fields: [story_id], references: [id], onDelete: Cascade)
+
+  @@id([highlight_id, story_id])
+  @@index([story_id])
+}
+
+/* ===========================
+   Users (with back-relations)
+   =========================== */
+
+model users {
+  id                    Int       @id @default(autoincrement())
+  username              String    @unique @db.VarChar(50)
+  email                 String    @unique @db.VarChar(100)
+  display_name          String    @db.VarChar(100)
+  password_hash         String
+  last_password_change  DateTime?
+  theme_preference      String?   @default("light") @db.VarChar(20)
+  lang_preference       String?   @default("en")    @db.VarChar(10)
+  created_at            DateTime? @default(now())   @db.Timestamptz(6)
+  updated_at            DateTime  @updatedAt        @db.Timestamptz(6)
+
+  // Optional: make follows request-based
+  is_private            Boolean   @default(false)
+
+  // Legacy URL (kept so old clients don't crash)
+  avatar_url            String?   @db.VarChar(300)
+
+  // NEW: store avatar bytes + MIME type in DB (Postgres)
+  avatarBlob            Bytes?
+  avatarMime            String?   @db.VarChar(100)
+
+  // === NEW: Profile background ===
+  // If you store files in S3/disk, you can populate profile_bg_url.
+  // If you store the image in Postgres, use profile_bg_blob/profile_bg_mime.
+  // Color can be used alone, or as a fallback behind the image.
+  profile_bg_color      String?   @db.VarChar(30)     // e.g. "#111827" or "#fff"
+  profile_bg_url        String?   @db.VarChar(300)    // optional legacy/external storage
+  profile_bg_blob       Bytes?                         // optional DB storage (bytea)
+  profile_bg_mime       String?   @db.VarChar(100)    // e.g. "image/png"
+  profile_bg_updated_at DateTime? @db.Timestamptz(6)  // for cache-busting/ETag
+
+  // Equipped cosmetic title (optional)
+  current_title_id Int?
+  current_title    titles?  @relation("users_current_title", fields: [current_title_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_user_current_title")
+
+  availability                         availability[]
+  calendar_events                      calendar_events[]
+
+  dm_chats_dm_chats_user1_idTousers    dm_chats[]     @relation("dm_chats_user1_idTousers")
+  dm_chats_dm_chats_user2_idTousers    dm_chats[]     @relation("dm_chats_user2_idTousers")
+  dm_messages                          dm_messages[]
+  dm_receipts                          dm_receipts[]
+
+  events                               events[]
+  friends_friends_friend_idTousers     friends[]      @relation("friends_friend_idTousers")
+  friends_friends_user_idTousers       friends[]      @relation("friends_user_idTousers")
+  group_members                        group_members[]
+  groups                               groups[]
+
+  messages_messages_receiver_idTousers messages[]     @relation("messages_receiver_idTousers")
+  messages_messages_sender_idTousers   messages[]     @relation("messages_sender_idTousers")
+
+  posts         posts[]
+  post_likes    post_likes[]
+  post_comments post_comments[]
+
+  // --- Followers graph back-relations ---
+  follows_as_follower user_follows[] @relation("user_follows_follower")
+  follows_as_followee user_follows[] @relation("user_follows_followee")
+
+  // --- Stories & Highlights back-relations ---
+  stories         stories[]
+  viewed_stories  story_views[] @relation("story_views_viewer")
+  highlights      highlights[]
+
+  blocks_as_blocker user_blocks[] @relation("user_blocks_blocker")
+  blocks_as_blockee user_blocks[] @relation("user_blocks_blockee")
+
+  notifications notifications[]
+
+  // 🔥 Back-relation for message read receipts
+  message_reads message_reads[]
+
+  // 🔥 New back-relations
+  whiteboards   whiteboards[]
+  sticky_notes  sticky_notes[]
+
+  // 🔥 Study Desk back-relations
+  study_desks     study_desks[]
+  study_tasks     study_tasks[]
+  study_resources study_resources[]
+  study_sessions  study_sessions[]
+
+  // 🔥 Streaks back-relations
+  streaks         Streak[]
+  streak_activity StreakActivity[]
+
+  // 🔥 Titles ownership
+  user_titles user_titles[]
+
+  // 🔥 Profile Page customization back-relations
+  profile_page       user_profile_pages?        @relation("users_profile_page")
+  profile_components user_profile_components[]  @relation("users_profile_components")
+
+  @@index([current_title_id])
+}
+
+/* ===========================
+   Safety & Notifications
+   =========================== */
+
+model user_blocks {
+  id         Int       @id @default(autoincrement())
+  blocker_id Int
+  blockee_id Int
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  blocker users @relation("user_blocks_blocker", fields: [blocker_id], references: [id], onDelete: Cascade)
+  blockee users @relation("user_blocks_blockee", fields: [blockee_id], references: [id], onDelete: Cascade)
+
+  @@unique([blocker_id, blockee_id], map: "unique_user_block")
+  @@index([blocker_id])
+  @@index([blockee_id])
+}
+
+model notifications {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  type       String    @db.VarChar(50)
+  payload    Json
+  is_read    Boolean   @default(false)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  users users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@index([created_at])
+}
+
+// ===========================
+// Profile Page Layout (User-Customizable)
+// ===========================
+
+enum ProfileBreakpoint {
+  mobile
+  tablet
+  desktop
+}
+
+model user_profile_pages {
+  user_id    Int      @id
+  theme      String?  @db.VarChar(30)      // optional future: "minimal", "classic", etc.
+  grid       Json?                          // optional: {cols, gutter, containerWidth}
+  is_locked  Boolean  @default(false)       // lock whole page from edits
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  // explicit relation name + FK mapping
+  users users @relation("users_profile_page", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_profilepage_user")
+}
+
+model user_profile_components {
+  id          Int               @id @default(autoincrement())
+  user_id     Int
+  key         String            @db.VarChar(60) // e.g., "avatar", "displayName", "bio", "streaks", "posts"
+  breakpoint  ProfileBreakpoint @default(desktop)
+
+  // layout
+  x           Float             @default(0)
+  y           Float             @default(0)
+  w           Float?
+  h           Float?
+  z_index     Int               @default(0)
+
+  // behavior
+  visible     Boolean           @default(true)
+  locked      Boolean           @default(false)
+  config      Json?                           // arbitrary per-component options
+
+  created_at  DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime          @updatedAt      @db.Timestamptz(6)
+
+  // explicit relation name + FK mapping
+  users users @relation("users_profile_components", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_profilecomp_user")
+
+  @@unique([user_id, key, breakpoint], name: "user_profile_components_unique")
+  @@index([user_id, breakpoint, z_index])
+}

@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Study Group Social Platform Design System */
+/* All colors MUST be HSL for proper theme switching */
+
+@layer base {
+  :root {
+    /* Main Brand Colors - Gray to Blue Gradient Theme */
+    --background: 210 20% 98%;
+    --background-secondary: 220 15% 95%;
+    --foreground: 220 8.9% 46.1%;
+    --foreground-muted: 220 5.2% 64.9%;
+
+    /* Brand Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(220 15% 95%) 0%, hsl(210 100% 85%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(220 15% 97%) 0%, hsl(210 100% 88%) 50%, hsl(200 100% 85%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(220 15% 98%) 100%);
+    
+    /* Interactive Colors */
+    --primary: 210 100% 70%;
+    --primary-hover: 210 100% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 15% 95%;
+    --secondary-hover: 220 15% 90%;
+    --secondary-foreground: 220 8.9% 46.1%;
+
+    --accent: 200 100% 85%;
+    --accent-hover: 200 100% 80%;
+    --accent-foreground: 220 8.9% 46.1%;
+
+    /* UI Elements */
+    --card: 0 0% 100%;
+    --card-hover: 220 15% 98%;
+    --card-foreground: 220 8.9% 46.1%;
+    --card-border: 220 15% 90%;
+
+    --border: 220 15% 90%;
+    --input: 220 15% 95%;
+    --ring: 210 100% 70%;
+
+    /* Status Colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Chat & Messaging */
+    --chat-bubble: 210 100% 85%;
+    --chat-bubble-own: 200 100% 80%;
+    --message-text: 220 8.9% 46.1%;
+
+    /* Navbar */
+    --navbar-bg: rgba(255, 255, 255, 0.98);
+    --navbar-border: hsl(220 15% 85% / 0.8);
+
+    --radius: 0.75rem;
+    --shadow-elegant: 0 4px 20px -4px hsl(220 15% 70% / 0.15);
+    --shadow-glow: 0 0 30px hsl(210 100% 70% / 0.3);
+  }
+
+  .night {
+    /* Night Mode - Starry Sky Theme */
+    --background: 220 40% 8%;
+    --background-secondary: 220 35% 12%;
+    --foreground: 220 15% 85%;
+    --foreground-muted: 220 10% 65%;
+
+    /* Dark Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(220 40% 8%) 0%, hsl(230 35% 15%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(220 40% 8%) 0%, hsl(230 35% 12%) 50%, hsl(240 30% 15%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(220 35% 15%) 0%, hsl(220 30% 18%) 100%);
+
+    /* Interactive Colors - Night Mode */
+    --primary: 210 100% 65%;
+    --primary-hover: 210 100% 70%;
+    --primary-foreground: 220 40% 8%;
+
+    --secondary: 220 35% 15%;
+    --secondary-hover: 220 35% 20%;
+    --secondary-foreground: 220 15% 85%;
+
+    --accent: 200 100% 60%;
+    --accent-hover: 200 100% 65%;
+    --accent-foreground: 220 40% 8%;
+
+    /* UI Elements - Night */
+    --card: 220 35% 15%;
+    --card-hover: 220 35% 18%;
+    --card-foreground: 220 15% 85%;
+    --card-border: 220 30% 25%;
+
+    --border: 220 30% 25%;
+    --input: 220 35% 12%;
+    --ring: 210 100% 65%;
+
+    /* Chat & Messaging - Night */
+    --chat-bubble: 210 100% 25%;
+    --chat-bubble-own: 200 100% 30%;
+    --message-text: 220 15% 85%;
+
+    /* Navbar - Night */
+    --navbar-bg: rgba(28, 25, 40, 0.98);
+    --navbar-border: hsl(220 30% 20% / 0.8);
+
+    --shadow-elegant: 0 4px 20px -4px hsl(220 40% 5% / 0.4);
+    --shadow-glow: 0 0 40px hsl(210 100% 65% / 0.2);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
